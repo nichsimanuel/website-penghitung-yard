@@ -1945,7 +1945,7 @@ body.dark-theme .theme-switcher{
 @media print{ 
  
     @page{ 
-        size:A4 landscape; 
+        size:A4 portrait; 
         margin:12mm 
     } 
  
@@ -4903,119 +4903,128 @@ function printHistory(){
     window.print(); 
 } 
  
-function exportHistoryToExcel(){ 
- 
-    const editingRow = 
-        historyBody.querySelector( 
-            "tr.editing" 
-        ); 
- 
-    if(editingRow){ 
- 
-        alert( 
-            "Selesaikan edit data terlebih dahulu sebelum export Excel." 
-        ); 
- 
-        return; 
-    } 
- 
-    const rows = 
-        historyBody.querySelectorAll( 
-            "tr:not(#emptyHistory)" 
-        ); 
- 
-    if(rows.length === 0){ 
- 
-        alert( 
-            "Belum ada data history untuk diekspor." 
-        ); 
- 
-        return; 
-    } 
- 
-    let excelRows = ""; 
- 
-    rows.forEach( 
-        (row,index) => { 
- 
-            const no = 
-                index + 1; 
- 
-            const yardElement = 
-                row.querySelector( 
-                    ".numbers-cell" 
-                ); 
- 
-            const pcsElement = 
-                row.querySelector( 
-                    ".pcs-cell" 
-                ); 
- 
-            const totalElement = 
-                row.querySelector( 
-                    ".total-cell" 
-                ); 
- 
-            const colorInput = 
-                row.querySelector( 
-                    ".color-input" 
-                ); 
- 
-            const yard = 
-                yardElement 
-                    ? yardElement.textContent.trim() 
-                    : ""; 
- 
-            const pcs = 
-                pcsElement 
-                    ? pcsElement.textContent.trim() 
-                    : ""; 
- 
-            const totalYard = 
-                totalElement 
-                    ? totalElement.textContent.trim() 
-                    : ""; 
- 
-            const warna = 
-                colorInput 
-                    ? colorInput.value.trim() 
-                    : ""; 
- 
-            excelRows += ` 
- 
-                <tr> 
- 
-                    <td style="text-align:center;"> 
-                        ${escapeExcel(no)} 
-                    </td> 
- 
-                    <td style="text-align:center;"> 
-                        ${escapeExcel(yard)} 
-                    </td> 
- 
-                    <td style="text-align:center;"> 
-                        ${escapeExcel(pcs)} 
-                    </td> 
- 
-                    <td style="text-align:center;"> 
-                        ${escapeExcel(totalYard)} 
-                    </td> 
- 
-                    <td style="text-align:center;"> 
-                        ${escapeExcel(warna)} 
-                    </td> 
- 
-                </tr> 
- 
-            `; 
-        } 
-    ); 
- 
+function exportHistoryToExcel(){
+
+    const editingRow =
+        historyBody.querySelector(
+            "tr.editing"
+        );
+
+    if(editingRow){
+        alert(
+            "Selesaikan edit data terlebih dahulu sebelum export Excel."
+        );
+        return;
+    }
+
+    const rows =
+        historyBody.querySelectorAll(
+            "tr:not(#emptyHistory)"
+        );
+
+    if(rows.length === 0){
+        alert(
+            "Belum ada data history untuk diekspor."
+        );
+        return;
+    }
+
+    let excelRows = "";
+
+    rows.forEach((row,index) => {
+
+        const no = index + 1;
+
+        const colorInput =
+            row.querySelector(
+                ".color-input"
+            );
+
+        /*
+         * YARD export wajib mengambil sumber data yang sama dengan PRINT,
+         * yaitu row.dataset.yards, bukan textContent dari .numbers-cell.
+         * .numbers-cell berisi HTML <span class="yard-value">...</span>,
+         * sehingga textContent langsung dapat membawa format HTML yang salah
+         * pada beberapa kondisi export.
+         */
+        let values = [];
+
+        try{
+            values = JSON.parse(
+                row.dataset.yards || "[]"
+            );
+        }catch(error){
+            values = [];
+        }
+
+        values = values
+            .map(value => parseYardNumber(value))
+            .filter(
+                value =>
+                    Number.isFinite(value) &&
+                    value > 0
+            );
+
+        /*
+         * Buat teks YARD murni, tanpa tag HTML.
+         * Hasilnya mengikuti tampilan PRINT:
+         * (12)(12)(12)(12)
+         * (25³⁴)(24⁵⁶)
+         */
+        const yard = values
+            .map(value =>
+                "(" +
+                formatNumber(value) +
+                ")"
+            )
+            .join("");
+
+        const pcs =
+            formatNumber(
+                values.length
+            );
+
+        const totalYard =
+            formatNumber(
+                calculateYardTotal(values)
+            );
+
+        const warna =
+            colorInput
+                ? colorInput.value.trim()
+                : "";
+
+        excelRows += `
+
+            <tr>
+
+                <td style="text-align:center;vertical-align:middle;mso-number-format:\"\\@\";">
+                    ${escapeExcel(no)}
+                </td>
+
+                <td style="text-align:center;vertical-align:middle;mso-number-format:\"\\@\";white-space:normal;">
+                    ${escapeExcel(yard)}
+                </td>
+
+                <td style="text-align:center;vertical-align:middle;mso-number-format:\"\\@\";">
+                    ${escapeExcel(pcs)}
+                </td>
+
+                <td style="text-align:center;vertical-align:middle;mso-number-format:\"\\@\";">
+                    ${escapeExcel(totalYard)}
+                </td>
+
+                <td style="text-align:center;vertical-align:middle;mso-number-format:\"\\@\";">
+                    ${escapeExcel(warna)}
+                </td>
+
+            </tr>
+
+        `;
+    });
+
     /*
-     * GRAND TOTAL harus mengikuti perhitungan PRINT secara persis.
-     * PRINT menggunakan row.dataset.yards saat baris tidak sedang diedit,
-     * lalu menjumlahkannya dengan addDecimalStrings() + calculateYardTotal().
-     * Export Excel menggunakan logika yang sama agar hasilnya identik.
+     * GRAND TOTAL menggunakan perhitungan yang sama persis dengan PRINT.
      */
     let grandTotalPCS = 0;
     let grandTotalYard = "0";
@@ -5032,11 +5041,13 @@ function exportHistoryToExcel(){
             values = [];
         }
 
-        values = values.filter(
-            value =>
-                Number.isFinite(Number(value)) &&
-                Number(value) > 0
-        );
+        values = values
+            .map(value => parseYardNumber(value))
+            .filter(
+                value =>
+                    Number.isFinite(value) &&
+                    value > 0
+            );
 
         grandTotalPCS += values.length;
 
@@ -5046,61 +5057,60 @@ function exportHistoryToExcel(){
         );
     });
 
-    /*
-     * formatNumber() adalah formatter yang sama dengan PRINT.
-     * Jadi angka desimal otomatis menjadi superscript Unicode.
-     * Contoh: 1250.5 -> 1.250⁵
-     */
-    const grandTotalYardExcelDisplay =
+    const grandTotalPCSDisplay =
+        formatNumber(grandTotalPCS);
+
+    const grandTotalYardDisplay =
         formatNumber(grandTotalYard);
 
-    const excelHTML = ` 
- 
-        <html> 
- 
-        <head> 
- 
-            <meta charset="UTF-8"> 
- 
-            <style> 
- 
-                body{ 
-                    font-family:Arial,Helvetica,sans-serif; 
-                } 
- 
-                h2{ 
-                    text-align:center; 
-                    font-size:18px; 
-                    margin-bottom:5px; 
-                } 
- 
-                p{ 
-                    text-align:center; 
-                    font-size:11px; 
-                    color:#555; 
-                    margin-bottom:18px; 
-                } 
- 
-                table{ 
-                    border-collapse:collapse; 
-                    width:100%; 
-                } 
- 
-                th{ 
-                    background:#e9e9e9; 
-                    color:#111; 
-                    border:1px solid #444; 
-                    padding:8px; 
-                    text-align:center; 
-                    font-weight:bold; 
-                } 
- 
-                td{ 
-                    border:1px solid #444; 
-                    padding:8px; 
-                    color:#111; 
-                    text-align:center; 
-                    vertical-align:middle; 
+    const excelHTML = `
+
+        <html>
+
+        <head>
+
+            <meta charset="UTF-8">
+
+            <style>
+
+                body{
+                    font-family:Arial,Helvetica,sans-serif;
+                }
+
+                h2{
+                    text-align:center;
+                    font-size:18px;
+                    margin-bottom:5px;
+                }
+
+                p{
+                    text-align:center;
+                    font-size:11px;
+                    color:#555;
+                    margin-bottom:18px;
+                }
+
+                table{
+                    border-collapse:collapse;
+                    width:100%;
+                }
+
+                th{
+                    background:#e9e9e9;
+                    color:#111;
+                    border:1px solid #444;
+                    padding:8px;
+                    text-align:center;
+                    font-weight:bold;
+                }
+
+                td{
+                    border:1px solid #444;
+                    padding:8px;
+                    color:#111;
+                    text-align:center;
+                    vertical-align:middle;
+                    mso-number-format:"\\@";
                 }
 
                 .grand-total-row td{
@@ -5119,62 +5129,63 @@ function exportHistoryToExcel(){
                     text-align:center!important;
                     font-weight:bold;
                     vertical-align:middle;
+                    mso-number-format:"\\@";
                 }
- 
-            </style> 
- 
-        </head> 
- 
-        <body> 
- 
-            <h2> 
-                NICHOLAS SULISTIO 
-            </h2> 
- 
-            <p> 
-                RIWAYAT INPUT YARD 
-            </p> 
- 
-            <table> 
- 
-                <thead> 
- 
-                    <tr> 
- 
-                        <th> 
-                            No 
-                        </th> 
- 
-                        <th> 
-                            YARD 
-                        </th> 
- 
-                        <th> 
-                            Total PCS 
-                        </th> 
- 
-                        <th> 
-                            Total Yard 
-                        </th> 
- 
-                        <th> 
-                            Warna 
-                        </th> 
- 
-                    </tr> 
- 
-                </thead> 
- 
-                <tbody> 
- 
+
+            </style>
+
+        </head>
+
+        <body>
+
+            <h2>
+                NICHOLAS SULISTIO
+            </h2>
+
+            <p>
+                RIWAYAT INPUT YARD
+            </p>
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            No
+                        </th>
+
+                        <th>
+                            YARD
+                        </th>
+
+                        <th>
+                            Total PCS
+                        </th>
+
+                        <th>
+                            Total Yard
+                        </th>
+
+                        <th>
+                            Warna
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
                     ${excelRows}
 
                     <tr class="grand-total-row">
                         <td colspan="3" class="grand-total-label" align="center" style="text-align:center!important;vertical-align:middle!important;">
                             GRAND TOTAL PCS
                         </td>
-                        <td colspan="2" class="grand-total-value" align="center" style="text-align:center!important;vertical-align:middle!important;">
-                            ${escapeExcel(formatNumber(grandTotalPCS))}
+                        <td colspan="2" class="grand-total-value" align="center" style="text-align:center!important;vertical-align:middle!important;mso-number-format:\"\\@\";">
+                            ${escapeExcel(grandTotalPCSDisplay)}
                         </td>
                     </tr>
 
@@ -5182,91 +5193,63 @@ function exportHistoryToExcel(){
                         <td colspan="3" class="grand-total-label" align="center" style="text-align:center!important;vertical-align:middle!important;">
                             GRAND TOTAL YARD
                         </td>
-                        <td colspan="2" class="grand-total-value" align="center" style="text-align:center!important;vertical-align:middle!important;">
-                            ${escapeExcel(grandTotalYardExcelDisplay || "0")}
+                        <td colspan="2" class="grand-total-value" align="center" style="text-align:center!important;vertical-align:middle!important;mso-number-format:\"\\@\";">
+                            ${escapeExcel(grandTotalYardDisplay || "0")}
                         </td>
                     </tr>
- 
-                </tbody> 
- 
-            </table> 
- 
-        </body> 
- 
-        </html> 
- 
-    `; 
- 
-    const blob = 
-        new Blob( 
-            [ 
-                "\ufeff", 
-                excelHTML 
-            ], 
-            { 
-                type: 
-                    "application/vnd.ms-excel;charset=utf-8;" 
-            } 
-        ); 
- 
-    const url = 
-        URL.createObjectURL(blob); 
- 
-    const link = 
-        document.createElement("a"); 
- 
-    link.href = url; 
- 
-    const now = 
-        new Date(); 
- 
-    const year = 
-        now.getFullYear(); 
- 
-    const month = 
-        String( 
-            now.getMonth() + 1 
-        ).padStart(2,"0"); 
- 
-    const day = 
-        String( 
-            now.getDate() 
-        ).padStart(2,"0"); 
- 
-    const hours = 
-        String( 
-            now.getHours() 
-        ).padStart(2,"0"); 
- 
-    const minutes = 
-        String( 
-            now.getMinutes() 
-        ).padStart(2,"0"); 
- 
-    const seconds = 
-        String( 
-            now.getSeconds() 
-        ).padStart(2,"0"); 
- 
-    link.download = 
-        `Data_Barang_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.xls`; 
- 
-    document.body.appendChild(link); 
- 
-    link.click(); 
- 
-    document.body.removeChild(link); 
- 
-    setTimeout( 
-        () => { 
- 
-            URL.revokeObjectURL(url); 
- 
-        }, 
-        1000 
-    ); 
-} 
- 
+
+                </tbody>
+
+            </table>
+
+        </body>
+
+        </html>
+
+    `;
+
+    const blob =
+        new Blob(
+            [
+                "\ufeff",
+                excelHTML
+            ],
+            {
+                type:
+                    "application/vnd.ms-excel;charset=utf-8;"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    const link =
+        document.createElement("a");
+
+    link.href = url;
+
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2,"0");
+    const day = String(now.getDate()).padStart(2,"0");
+    const hours = String(now.getHours()).padStart(2,"0");
+    const minutes = String(now.getMinutes()).padStart(2,"0");
+    const seconds = String(now.getSeconds()).padStart(2,"0");
+
+    link.download =
+        `Data_Barang_${year}-${month}-${day}_${hours}-${minutes}-${seconds}.xls`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(
+        () => URL.revokeObjectURL(url),
+        1000
+    );
+}
+
 function escapeExcel(value){ 
  
     return String(value ?? "") 
